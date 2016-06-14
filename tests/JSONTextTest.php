@@ -76,6 +76,16 @@ class JSONTextTest extends SapphireTest
         $this->assertEquals('[]', $field->first());
     }
 
+    public function testFirst_AsSS()
+    {
+        $field = JSONText\Fields\JSONText::create('MyJSON');
+        $field->setValue($this->getFixture('array_simple'));
+        $field->setReturnType('silverstripe');
+        $this->assertInstanceOf('ArrayList', $field->first());
+        $this->assertInstanceOf('Varchar', $field->first()->first());
+        $this->assertEquals('great wall', $field->first()->first()->getValue());
+    }
+
     public function testLast_AsArray()
     {
         $field = JSONText\Fields\JSONText::create('MyJSON');
@@ -102,6 +112,16 @@ class JSONTextTest extends SapphireTest
         $field->setReturnType('json');
         $this->assertInternalType('string', $field->first());
         $this->assertEquals('[]', $field->first());
+    }
+
+    public function testLast_AsSS()
+    {
+        $field = JSONText\Fields\JSONText::create('MyJSON');
+        $field->setValue($this->getFixture('array_simple'));
+        $field->setReturnType('silverstripe');
+        $this->assertInstanceOf('ArrayList', $field->last());
+        $this->assertInstanceOf('Varchar', $field->last()->last());
+        $this->assertEquals('morris', $field->last()->last()->getValue());
     }
 
     public function testNth_AsArray()
@@ -136,14 +156,37 @@ class JSONTextTest extends SapphireTest
         $field = JSONText\Fields\JSONText::create('MyJSON');
         $field->setValue($this->getFixture('empty'));
         $field->setReturnType('json');
-        $this->assertInternalType('string', $field->first());
-        $this->assertEquals('[]', $field->first());
+        $this->assertInternalType('string', $field->nth(0));
+        $this->assertEquals('[]', $field->nth(0));
 
         $this->setExpectedException('\JSONText\Exceptions\JSONTextException');
         $field = JSONText\Fields\JSONText::create('MyJSON');
         $field->setValue($this->getFixture('hash_simple'));
         $field->setReturnType('json');
         $this->assertEquals('{"british":["vauxhall","morris"]}', $field->nth('2'));
+    }
+
+    public function testNth_AsSS()
+    {
+        $field = JSONText\Fields\JSONText::create('MyJSON');
+        $field->setValue($this->getFixture('array_simple'));
+        $field->setReturnType('silverstripe');
+        $this->assertInstanceOf('ArrayList', $field->nth(2));
+        $this->assertInstanceOf('Varchar', $field->nth(2)->first());
+        $this->assertEquals('trabant', $field->nth(2)->first()->getValue());
+
+        $field = JSONText\Fields\JSONText::create('MyJSON');
+        $field->setValue($this->getFixture('empty'));
+        $field->setReturnType('silverstripe');
+        $this->assertInternalType('boolean', $field->nth(2)->first());
+        $this->assertEquals(false, $field->nth(2)->first()); // PHP's reset() returns `false` in ArrayList::first() for empty values
+
+        // Still throws an exception, regardless of the return type set
+        $this->setExpectedException('\JSONText\Exceptions\JSONTextException');
+        $field = JSONText\Fields\JSONText::create('MyJSON');
+        $field->setValue($this->getFixture('hash_simple'));
+        $field->setReturnType('silverstripe');
+        $field->nth('2');
     }
 
     /**
@@ -202,6 +245,39 @@ class JSONTextTest extends SapphireTest
 
         $this->assertEquals(['planes' => ['russian' => ['antonov', 'mig'], 'french' => 'airbus']], $field->query('->>', 'planes'));
         $this->assertEquals([], $field->query('->', '7')); // Attempt to match a string using the int matcher
+    }
+
+    /**
+     * Tests query() by means of the integer Postgres operator: '->'
+     */
+    public function testQuery_MatchOnKeyAsInt_AsSS()
+    {
+        // Hashed
+        $field = JSONText\Fields\JSONText::create('MyJSON');
+        $field->setValue($this->getFixture('hash_simple'));
+        $field->setReturnType('silverstripe');
+        
+        var_dump($field->query('->', 5)->first()->getValue());
+        die;
+
+        $this->assertEquals(['british' => ['vauxhall', 'morris']], $field->query('->', 5)->first()->getValue());
+        $this->assertEquals(['american' => ['buick', 'oldsmobile', 'ford']], $field->query('->', 1));
+        $this->assertEquals([], $field->query('->', '6')); // strict handling
+
+        // Empty
+        $field = JSONText\Fields\JSONText::create('MyJSON');
+        $field->setValue($this->getFixture('empty'));
+        $field->setReturnType('array');
+        $this->assertEquals([], $field->query('->', 42));
+
+        // Nested
+        $field = JSONText\Fields\JSONText::create('MyJSON');
+        $field->setValue($this->getFixture('hash_deep'));
+        $field->setReturnType('array');
+
+        $this->assertEquals(['planes' => ['russian' => ['antonov', 'mig'], 'french' => 'airbus']], $field->query('->', 7));
+        $this->assertEquals([], $field->query('->', '7')); // Attempt to match a string using the int matcher 
+        $this->assertEquals([0 => 'buick'], $field->query('->', 2));
     }
 
     /**

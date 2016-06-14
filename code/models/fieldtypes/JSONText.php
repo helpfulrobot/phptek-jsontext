@@ -125,7 +125,7 @@ class JSONText extends \StringField
     }
 
     /**
-     * Tell all class methods to return data as JSON or an array.
+     * Tell all class methods to return data as JSON , an array or an array of SilverStripe DBField subtypes.
      * 
      * @param string $type
      * @return \JSONText
@@ -133,12 +133,14 @@ class JSONText extends \StringField
      */
     public function setReturnType($type)
     {
-        if (!in_array($type, ['json', 'array'])) {
+        if (!in_array($type, ['json', 'array', 'silverstripe'])) {
             $msg = 'Bad type: ' . $type . ' passed to ' . __FUNCTION__;
             throw new JSONTextException($msg);
         }
         
         $this->returnType = $type;
+        
+        return $this;
     }
 
     /**
@@ -198,10 +200,12 @@ class JSONText extends \StringField
     }
 
     /**
+     * Convert an array to JSON via json_encode().
+     * 
      * @param array $value
      * @return mixed null|string
      */
-    public function toJson($value)
+    public function toJson(array $value)
     {
         if (!is_array($value)) {
             $value = (array) $value;
@@ -212,6 +216,35 @@ class JSONText extends \StringField
         );
         
         return json_encode($value, $opts);
+    }
+
+    /**
+     * @var array
+     */
+    protected $newList = [];
+    
+    /**
+     * Convert an array's values into an array of SilverStripe DBField subtypes ala:
+     * 
+     * - {@link Int}
+     * - {@link Float}
+     * - {@link Boolean}
+     * - {@link Varchar}
+     * 
+     * @param array $data
+     * @return \ArrayList
+     */
+    public function toSSTypes(array $data)
+    {
+        foreach ($data as $key => $val) {
+            if (!is_array($val) && empty($this->newList[$key])) {
+                $this->newList[$key] = $this->castToDBField($val);
+            } else {
+                $this->toSSTypes($val);
+            }
+        }
+        
+        return \ArrayList::create($this->newList);
     }
 
     /**
@@ -401,6 +434,10 @@ class JSONText extends \StringField
         if (($this->getReturnType() === 'json')) {
             return $this->toJson($data);
         }
+
+        if (($this->getReturnType() === 'silverstripe')) {
+            return $this->toSSTypes($data);
+        }
     }
 
     /**
@@ -414,6 +451,26 @@ class JSONText extends \StringField
         $backend = $this->config()->backend;
 
         return $operator && in_array($operator, $this->config()->allowed_operators[$backend], true);
+    }
+    
+    /**
+     * Casts a value to a {@link DBField} subclass.
+     * 
+     * @param mixed $val
+     * @return DBField
+     */
+    private function castToDBField($val)
+    {
+        if (is_float($val)) {
+            return \DBField::create_field('Float', $val);
+        } else if (is_int($val)) {
+            return \DBField::create_field('Int', $val);
+        } else if (is_bool($val)) {
+            return \DBField::create_field('Boolean', $val);
+        } else {
+            // Default to Varchar
+            return \DBField::create_field('Varchar', $val);
+        }
     }
 
 }
