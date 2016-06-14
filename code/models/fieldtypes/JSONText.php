@@ -236,15 +236,15 @@ class JSONText extends \StringField
      */
     public function toSSTypes(array $data)
     {
-        foreach ($data as $key => $val) {
-            if (!is_array($val) && empty($this->newList[$key])) {
-                $this->newList[$key] = $this->castToDBField($val);
+        foreach ($data as $val) {
+            if (!is_array($val)) {
+                $this->newList[] = $this->castToDBField($val);
             } else {
                 $this->toSSTypes($val);
             }
         }
         
-        return \ArrayList::create($this->newList);
+        return $this->newList;
     }
 
     /**
@@ -424,20 +424,25 @@ class JSONText extends \StringField
      * 
      * @param mixed array|\Iterator $data
      * @return mixed
+     * @throws \JSONText\Exceptions\JSONTextException
      */
     private function returnAsType(array $data)
     {
-        if (($this->getReturnType() === 'array')) {
+        $type = $this->getReturnType();
+        if ($type === 'array') {
             return $data;
         }
 
-        if (($this->getReturnType() === 'json')) {
+        if ($type === 'json') {
             return $this->toJson($data);
         }
 
-        if (($this->getReturnType() === 'silverstripe')) {
+        if ($type === 'silverstripe') {
             return $this->toSSTypes($data);
         }
+        
+        $msg = 'Bad argument passed to ' . __FUNCTION__;
+        throw new JSONTextException($msg);
     }
 
     /**
@@ -463,10 +468,11 @@ class JSONText extends \StringField
     {
         if (is_float($val)) {
             return \DBField::create_field('Float', $val);
+        } else if (is_bool($val)) {
+            $val = ($val === true ? 1 : 0); // *mutter....*
+            return \DBField::create_field('Boolean', $val);
         } else if (is_int($val)) {
             return \DBField::create_field('Int', $val);
-        } else if (is_bool($val)) {
-            return \DBField::create_field('Boolean', $val);
         } else {
             // Default to Varchar
             return \DBField::create_field('Varchar', $val);
